@@ -6,7 +6,59 @@ async function load(){const r=await fetch('/api/books');const d=await r.json();a
 function render(){const q=$('search').value.toLowerCase();$('shelf').replaceChildren(...all.filter(b=>(b.title+' '+b.author+' '+b.code).toLowerCase().includes(q)).map(b=>{const el=document.createElement('article');el.className='book';const img=document.createElement('img');img.src='/static/covers/'+encodeURIComponent(b.cover);img.alt=b.title+' мұқабасы';img.onerror=()=>{img.style.display='none'};const h=document.createElement('h3');h.textContent=b.title;const a=document.createElement('small');a.textContent=b.author+' · '+b.code;const st=document.createElement('div');st.className=b.available?'status':'status out';st.textContent=b.available?'● Қолда бар':'● Берілген';const btn=document.createElement('button');btn.textContent='Кодты таңдау';btn.onclick=()=>{$('code').value=b.code;window.scrollTo({top:0,behavior:'smooth'})};el.append(img,h,a,st,btn);if(b.pdf_url){const link=document.createElement('a');link.href=b.pdf_url;link.target='_blank';link.rel='noopener noreferrer';link.textContent='PDF оқу';el.append(link)}return el}))}
 $('search').oninput=render;$('submit').onclick=async()=>{try{const r=await fetch('/api/transaction',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:$('code').value,reader:$('reader').value,action:$('action').value})});const d=await r.json();if(!r.ok)throw Error(d.error);msg('✅ Операция сәтті тіркелді');await load()}catch(e){msg('⚠️ '+e.message)}};
 function detected(v){if(!v)return;let code=v.trim();try{const u=new URL(code);code=u.searchParams.get('code')||code}catch{}if(/^\d{4}$/.test(code)){$('code').value=code;msg('Код танылды: '+code)}else msg('Танылған мән: '+code+' (кітап кодын тексеріңіз)')}
-$('camera').onclick=async()=>{if(!('BarcodeDetector'in window)){msg('Бұл браузерде BarcodeDetector жоқ. OpenCV арқылы сурет жүктеп тексеріңіз.');return}try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});$('video').srcObject=stream;const formats=await BarcodeDetector.getSupportedFormats();const det=new BarcodeDetector({formats:formats.filter(f=>['qr_code','code_128','ean_13','ean_8','code_39'].includes(f))});timer=setInterval(async()=>{if($('video').readyState<2)return;try{const found=await det.detect($('video'));if(found.length)detected(found[0].rawValue)}catch{}},500);msg('Камера қосылды')}catch(e){msg('Камера ашылмады: '+e.message)}};
-$('stop').onclick=()=>{clearInterval(timer);timer=null;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}$('video').srcObject=null;msg('Камера тоқтады')};
+
 $('file').onchange=async e=>{const file=e.target.files[0];if(!file)return;const fd=new FormData();fd.append('image',file);try{const r=await fetch('/api/scan-image',{method:'POST',body:fd});const d=await r.json();if(!r.ok)throw Error(d.error);if(d.found)detected(d.code);else msg('Код танылмады. Суретті анық түсіріңіз.')}catch(err){msg(err.message)}};load().catch(e=>msg('Сервер қатесі: '+e.message));
-</script></body></html>
+let qrScanner = null;
+
+$('camera').onclick = async () => {
+  try {
+    if (qrScanner) return;
+
+    if (typeof Html5Qrcode === 'undefined') {
+      msg('Сканер кітапханасы жүктелмеді');
+      return;
+    }
+
+    const video = $('video');
+    video.style.display = 'none';
+
+    let area = document.getElementById('qr-reader');
+    if (!area) {
+      area = document.createElement('div');
+      area.id = 'qr-reader';
+      area.style.maxWidth = '480px';
+      video.parentElement.appendChild(area);
+    }
+
+    qrScanner = new Html5Qrcode('qr-reader');
+
+    await qrScanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 220, height: 220 } },
+      (text) => detected(text),
+      () => {}
+    );
+
+    msg('Камера қосылды. Кодты көрсетіңіз.');
+  } catch (e) {
+    qrScanner = null;
+    msg('Камера қатесі: ' + e.message);
+  }
+};
+
+$('stop').onclick = async () => {
+  try {
+    if (qrScanner) {
+      await qrScanner.stop();
+      qrScanner.clear();
+      qrScanner = null;
+    }
+    msg('Камера тоқтады');
+  } catch (e) {
+    msg('Тоқтату қатесі: ' + e.message);
+  }
+};
+</script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+</body></html>

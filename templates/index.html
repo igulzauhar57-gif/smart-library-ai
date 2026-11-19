@@ -1,64 +1,240 @@
-<!doctype html><html lang="kk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SMART LIBRARY AI</title><style>
-:root{font-family:system-ui,'Segoe UI',sans-serif;color:#1c2b46;background:#edf2fa}*{box-sizing:border-box}body{margin:0}header{background:linear-gradient(120deg,#102454,#254eb4);color:white;text-align:center;padding:35px 15px}header h1{margin:0;font-size:clamp(28px,5vw,46px)}header p{margin:9px}main{max-width:1150px;margin:auto;padding:20px}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.stat,.panel{background:white;border-radius:18px;padding:20px;box-shadow:0 6px 20px #182e5812}.stat strong{display:block;font-size:30px;color:#2451b5}.stat small{color:#65758c}.panel{margin-top:18px}h2{margin:0 0 16px}input,select,button{font:inherit;padding:11px;border-radius:10px;border:1px solid #c6d2e4}input{max-width:100%;width:100%}button{background:#2457c7;color:white;border:0;cursor:pointer}button:disabled{opacity:.45}.tools{display:flex;gap:10px;flex-wrap:wrap}.tools>*{flex:1;min-width:160px}.shelf{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:18px;padding:20px;background:linear-gradient(#f4dfbb,#b47b45);border:12px solid #855128;border-radius:15px;box-shadow:inset 0 -12px 5px #71451c}.book{background:#fff9ed;padding:12px;border-radius:10px;box-shadow:5px 8px 0 #76502b;transition:transform .2s;min-width:0}.book:hover{transform:perspective(500px) rotateY(-9deg) translateY(-5px)}.book img{width:110px;height:154px;object-fit:cover;border-radius:5px;display:block;margin:auto;background:#d4deed}.book h3{font-size:15px;min-height:44px}.book small{display:block;min-height:35px}.book button,.book a{display:inline-block;font-size:12px;margin-top:8px;padding:8px;text-decoration:none;border-radius:7px;background:#2457c7;color:white}.book .status{font-weight:700;color:#15704d}.book .out{color:#a23a2a}#video{width:min(100%,480px);border-radius:12px;background:#1b2536}#message{min-height:22px;font-weight:600}.muted{color:#69778a}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #e0e6ef;text-align:left;padding:9px;font-size:13px}@media(max-width:550px){.stats{grid-template-columns:1fr 1fr 1fr}.stat{padding:12px}.stat strong{font-size:23px}}
-</style></head><body><header><h1>📚 SMART LIBRARY AI</h1><p>М. Әбенова атындағы ЖББМ</p><p>QR және штрих-код арқылы кітаптарды автоматты есепке алу</p></header><main><section class="stats"><div class="stat"><strong id="total">—</strong><small>Барлық кітап</small></div><div class="stat"><strong id="available">—</strong><small>Қолда бар</small></div><div class="stat"><strong id="loaned">—</strong><small>Берілген</small></div></section><section class="panel"><h2>📷 Кодты тану және есепке алу</h2><p class="muted">Камера арқылы сканерлеу HTTPS немесе localhost мекенжайында жұмыс істейді. Сурет жүктеу арқылы OpenCV тануын тексеруге болады.</p><div class="tools"><input id="code" placeholder="Кітап коды (мысалы, 1001)"><input id="reader" placeholder="Оқырманның аты-жөні"><select id="action"><option value="issue">Кітап беру</option><option value="return">Кітап қайтару</option></select><button id="submit">Тіркеу</button></div><p id="message" role="status"></p><div class="tools"><button id="camera">Камераны қосу</button><button id="stop">Камераны тоқтату</button><input id="file" type="file" accept="image/*" aria-label="QR немесе штрих-код суретін жүктеу"></div><p><video id="video" autoplay muted playsinline></video></p></section><section class="panel"><h2>📖 3D кітап сөресі</h2><input id="search" placeholder="Кітап атауы немесе автор бойынша іздеу..."><p></p><div id="shelf" class="shelf"></div></section><section class="panel"><h2>📊 Беру және қайтару тарихы</h2><div style="overflow-x:auto"><table><thead><tr><th>Кітап</th><th>Оқырман</th><th>Берілді</th><th>Қайтарылды</th></tr></thead><tbody id="history"></tbody></table></div></section></main><script>
-const $=id=>document.getElementById(id);let all=[],stream=null,timer=null;const msg=t=>$('message').textContent=t;
-async function load(){const r=await fetch('/api/books');const d=await r.json();all=d.books;Object.entries(d.stats).forEach(([k,v])=>$(k).textContent=v);render();const h=await (await fetch('/api/loans')).json();$('history').replaceChildren(...h.map(x=>{const tr=document.createElement('tr');[x.title,x.reader,x.issued_at,x.returned_at||'—'].forEach(v=>{const td=document.createElement('td');td.textContent=v;tr.append(td)});return tr}))}
-function render(){const q=$('search').value.toLowerCase();$('shelf').replaceChildren(...all.filter(b=>(b.title+' '+b.author+' '+b.code).toLowerCase().includes(q)).map(b=>{const el=document.createElement('article');el.className='book';const img=document.createElement('img');img.src='/static/covers/'+encodeURIComponent(b.cover);img.alt=b.title+' мұқабасы';img.onerror=()=>{img.style.display='none'};const h=document.createElement('h3');h.textContent=b.title;const a=document.createElement('small');a.textContent=b.author+' · '+b.code;const st=document.createElement('div');st.className=b.available?'status':'status out';st.textContent=b.available?'● Қолда бар':'● Берілген';const btn=document.createElement('button');btn.textContent='Кодты таңдау';btn.onclick=()=>{$('code').value=b.code;window.scrollTo({top:0,behavior:'smooth'})};el.append(img,h,a,st,btn);if(b.pdf_url){const link=document.createElement('a');link.href=b.pdf_url;link.target='_blank';link.rel='noopener noreferrer';link.textContent='PDF оқу';el.append(link)}return el}))}
-$('search').oninput=render;$('submit').onclick=async()=>{try{const r=await fetch('/api/transaction',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:$('code').value,reader:$('reader').value,action:$('action').value})});const d=await r.json();if(!r.ok)throw Error(d.error);msg('✅ Операция сәтті тіркелді');await load()}catch(e){msg('⚠️ '+e.message)}};
-function detected(v){if(!v)return;let code=v.trim();try{const u=new URL(code);code=u.searchParams.get('code')||code}catch{}if(/^\d{4}$/.test(code)){$('code').value=code;msg('Код танылды: '+code)}else msg('Танылған мән: '+code+' (кітап кодын тексеріңіз)')}
-
-$('file').onchange=async e=>{const file=e.target.files[0];if(!file)return;const fd=new FormData();fd.append('image',file);try{const r=await fetch('/api/scan-image',{method:'POST',body:fd});const d=await r.json();if(!r.ok)throw Error(d.error);if(d.found)detected(d.code);else msg('Код танылмады. Суретті анық түсіріңіз.')}catch(err){msg(err.message)}};load().catch(e=>msg('Сервер қатесі: '+e.message));
-let qrScanner = null;
-
-$('camera').onclick = async () => {
-  try {
-    if (qrScanner) return;
-
-    if (typeof Html5Qrcode === 'undefined') {
-      msg('Сканер кітапханасы жүктелмеді');
-      return;
-    }
-
-    const video = $('video');
-    video.style.display = 'none';
-
-    let area = document.getElementById('qr-reader');
-    if (!area) {
-      area = document.createElement('div');
-      area.id = 'qr-reader';
-      area.style.maxWidth = '480px';
-      video.parentElement.appendChild(area);
-    }
-
-    qrScanner = new Html5Qrcode('qr-reader');
-
-    await qrScanner.start(
-      { facingMode: 'environment' },
-      { fps: 10, qrbox: { width: 220, height: 220 } },
-      (text) => detected(text),
-      () => {}
-    );
-
-    msg('Камера қосылды. Кодты көрсетіңіз.');
-  } catch (e) {
-    qrScanner = null;
-    msg('Камера қатесі: ' + e.message);
+<!doctype html><html lang="kk"><head><meta name="csrf-token" content="{{ csrf_token }}"><script>
+(function(){
+ const originalFetch=window.fetch.bind(window);
+ window.fetch=function(input,options){
+  const opts={...(options||{})};
+  const method=(opts.method||'GET').toUpperCase();
+  if(!['GET','HEAD','OPTIONS'].includes(method)){
+   opts.headers=new Headers(opts.headers||{});
+   opts.headers.set('X-CSRF-Token',document.querySelector('meta[name="csrf-token"]').content);
   }
-};
-
-$('stop').onclick = async () => {
-  try {
-    if (qrScanner) {
-      await qrScanner.stop();
-      qrScanner.clear();
-      qrScanner = null;
-    }
-    msg('Камера тоқтады');
-  } catch (e) {
-    msg('Тоқтату қатесі: ' + e.message);
+  return originalFetch(input,opts);
+ };
+})();
+</script><script>window.SMART_CSRF="__CSRF__";</script><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SMART LIBRARY AI</title><style>
+:root{font-family:system-ui,'Segoe UI',sans-serif;color:#1c2b46;background:#edf2fa}*{box-sizing:border-box}body{margin:0}header{background:linear-gradient(120deg,#102454,#254eb4);color:white;text-align:center;padding:35px 15px}header h1{margin:0;font-size:clamp(28px,5vw,46px)}header p{margin:9px}main{max-width:1150px;margin:auto;padding:20px}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.stat,.panel{background:white;border-radius:18px;padding:20px;box-shadow:0 6px 20px #182e5812}.stat strong{display:block;font-size:30px;color:#2451b5}.stat small{color:#65758c}.panel{margin-top:18px}h2{margin:0 0 16px}input,select,button{font:inherit;padding:11px;border-radius:10px;border:1px solid #c6d2e4}input{max-width:100%;width:100%}button{background:#2457c7;color:white;border:0;cursor:pointer}button:disabled{opacity:.45}.tools{display:flex;gap:10px;flex-wrap:wrap}.tools>*{flex:1;min-width:160px}.shelf{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:18px;padding:20px;background:linear-gradient(#f4dfbb,#b47b45);border:12px solid #855128;border-radius:15px;box-shadow:inset 0 -12px 5px #71451c}.book{background:#fff9ed;padding:12px;border-radius:10px;box-shadow:5px 8px 0 #76502b;transition:transform .2s;min-width:0}.book:hover{transform:perspective(500px) rotateY(-9deg) translateY(-5px)}.book img{width:110px;height:154px;object-fit:cover;border-radius:5px;display:block;margin:auto;background:#d4deed}.book h3{font-size:15px;min-height:44px}.book small{display:block;min-height:35px}.book button,.book a{display:inline-block;font-size:12px;margin:8px 4px 0 0;padding:8px;text-decoration:none;border-radius:7px;background:#2457c7;color:white}.book .status{font-weight:700;color:#15704d;margin:9px 0}.book .status.unavailable{color:#b42318}.inventory-label{font-weight:750;color:#254eb4;overflow-wrap:anywhere;margin:10px 0}.pending-copy{border:1px dashed #b6a383;background:#fffdf6}#video{width:min(100%,480px);border-radius:12px;background:#1b2536}#message{min-height:22px;font-weight:600}.muted{color:#69778a}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #e0e6ef;text-align:left;padding:9px;font-size:13px}.form-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.form-fields button{justify-self:start}@media(max-width:650px){.stats{grid-template-columns:repeat(2,1fr)}.form-fields{grid-template-columns:1fr}.stat{padding:12px}.stat strong{font-size:23px}}
+.book img {display:none!important;} .loan-search{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}.loan-search input{flex:1;min-width:230px}.loan-result{overflow-x:auto}.return-btn{background:#18794e}.loan-note{color:#69778a;font-size:13px}</style></head><body><header><h1>📚 SMART LIBRARY AI</h1><p>М. Әбенова атындағы жалпы білім беретін мектеп</p><p>Инвентарлық нөмір арқылы кітаптарды есепке алу</p></header><main><div style="display:flex;justify-content:flex-end;align-items:center;gap:12px"><span>Кітапханашы: {{ librarian }}</span><button type="button" onclick="fetch('/logout',{method:'POST'}).then(()=>location.href='/login')">Шығу</button></div>
+<section class="stats"><div class="stat"><strong id="total">—</strong><small>Кітап жазбалары</small></div><div class="stat"><strong id="total_copies">—</strong><small>Жалпы кітап қоры</small></div><div class="stat"><strong id="available">—</strong><small>Қолда бар</small></div><div class="stat"><strong id="loaned">—</strong><small>Берілген</small></div></section>
+<section class="panel"><h2>📷 Кодты тану және есепке алу</h2><p class="muted">Инвентарлық нөмірді енгізіңіз. Бұрынғы кітап кодымен тіркелген жазбалар да қолданылады.</p><div class="tools"><input id="code" placeholder="Инвентарлық нөмір (мысалы, 028681)"><input id="reader" placeholder="Оқырманның аты-жөні"><select id="reader_type"><option value="">Оқырман түрін таңдаңыз</option><option value="student">Оқушы</option><option value="teacher">Мұғалім</option></select><select id="action"><option value="issue">Кітап беру</option><option value="return">Кітап қайтару</option></select><button id="submit">Тіркеу</button></div><p id="message" role="status"></p><div class="tools"><button id="camera">Камераны қосу</button><button id="stop">Камераны тоқтату</button><input id="file" type="file" accept="image/*" aria-label="QR немесе штрих-код суретін жүктеу"></div><p><video id="video" autoplay muted playsinline></video></p></section>
+<section class="panel"><h2>📖 3D кітап сөресі</h2><input id="search" placeholder="Кітап атауы немесе автор бойынша іздеу..."><p></p><div id="shelf" class="shelf"></div></section>
+<section class="panel"><h2>📊 Беру және қайтару тарихы</h2><div style="overflow-x:auto"><table><thead><tr><th>Кітап</th><th>Оқырман</th><th>Түрі</th><th>Берілді</th><th>Қайтарылды</th></tr></thead><tbody id="history"></tbody></table></div></section>
+<section class="panel"><h2>🔎 Оқырманның кітаптарын іздеу және қайтару</h2><p class="muted">Оқушының немесе мұғалімнің аты-жөнін енгізіңіз. Тек қайтарылмаған кітаптар көрсетіледі.</p><div class="loan-search"><select id="loanSearchType">
+  <option value="reader">Оқырман аты бойынша</option>
+  <option value="book">Кітап атауы бойынша</option>
+  <option value="author">Автор бойынша</option>
+</select><input id="loanSearch" placeholder="Мысалы, Асанов Айдос"><button id="loanSearchBtn" type="button">Іздеу</button></div><p id="loanSearchMessage" role="status" class="loan-note"></p><div class="loan-result"><table><thead><tr><th>Оқырман</th><th>Кітап</th><th>Берілген уақыты</th><th>Әрекет</th></tr></thead><tbody id="loanSearchResults"></tbody></table></div></section>
+<section class="panel" id="inventory-panel"><h2>📚 Кітапты тіркеу</h2>
+<p class="muted">Жаңа кітап болса атауы мен авторын жазыңыз. Бұрынғы кітаптың жаңа данасы болса тізімнен таңдаңыз. Әр дананың инвентарлық нөмірі жеке тіркеледі.</p>
+<div class="form-fields"><select id="inventoryBook"><option value="">Жаңа кітап енгізу</option></select><input id="newTitle" placeholder="Кітап атауы"><input id="newAuthor" placeholder="Автор"><input id="inventoryNumber" type="text" placeholder="Инвентарлық нөмір (мысалы, 02879)" autocomplete="off"><button id="inventoryAddBtn" type="button">Кітапты тіркеу</button></div><p id="inventoryMessage" role="status"></p></section>
+<section class="panel" id="manage-panel"><h2>📚 Кітапханашының басқару панелі</h2><p class="muted">Жоғарыдағы «Кітапты тіркеу» бөлімінде жаңа кітапты немесе бұрынғы кітаптың кез келген қосымша данасын инвентарлық нөмірімен тіркеңіз. Мұнда мәліметтерді түзете аласыз.</p><h3>Кітап атауы мен авторын түзету</h3><div class="form-fields"><select id="manageBook"><option value="">Кітапты таңдаңыз</option></select><input id="manageTitle" placeholder="Кітап атауы"><input id="manageAuthor" placeholder="Автор"><button id="manageSave" type="button">Мәліметтерді сақтау</button></div><p id="manageMessage" role="status"></p><h3>Инвентарлық нөмірді өзгерту</h3><div class="form-fields"><select id="manageCopy"><option value="">Инвентарлық нөмірді таңдаңыз</option></select><input id="manageNewNumber" placeholder="Жаңа инвентарлық нөмір" autocomplete="off"><button id="manageRename" type="button">Нөмірді өзгерту</button></div><p id="renameMessage" role="status"></p></section>
+<section class="panel" id="library-report-panel">
+  <h2>📊 Кітапхана статистикасы</h2>
+  <p>Оқушылар мен мұғалімдердің айлық және оқу жылдық есебі</p>
+  <div class="report-controls">
+    <label>Есеп түрі <select id="reportPeriod"><option value="month">Айлық</option><option value="school_year">Оқу жылы</option></select></label>
+    <label id="reportMonthWrap">Ай <select id="reportMonth"><option value="1">Қаңтар</option><option value="2">Ақпан</option><option value="3">Наурыз</option><option value="4">Сәуір</option><option value="5">Мамыр</option><option value="6">Маусым</option><option value="7">Шілде</option><option value="8">Тамыз</option><option value="9">Қыркүйек</option><option value="10">Қазан</option><option value="11">Қараша</option><option value="12">Желтоқсан</option></select></label>
+    <label>Жыл (оқу жылының басталуы) <input id="reportYear" type="number" min="2000" max="2100" value="2026"></label>
+    <button type="button" id="reportRefresh">Есепті көрсету</button>
+    <button type="button" id="reportDownload">Excel үшін CSV жүктеу</button>
+  </div>
+  <p id="reportStatus" role="status"></p>
+  <div class="report-grid" id="reportGrid"></div>
+</section>
+<style>
+#library-report-panel .report-controls{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:16px 0}
+#library-report-panel label{display:flex;flex-direction:column;gap:5px;font-weight:600}
+#library-report-panel input,#library-report-panel select{padding:10px;border:1px solid #ccd4e0;border-radius:8px;background:white;color:#1c2b46}
+#library-report-panel button{padding:11px 15px;border:0;border-radius:8px;background:#2859c5;color:white;cursor:pointer}
+#library-report-panel .report-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+#library-report-panel .report-card{padding:18px;border-radius:14px;background:#f1f5ff;border:1px solid #dbe4fa}
+#library-report-panel .report-card h3{margin:0 0 12px}
+#library-report-panel .report-card p{margin:7px 0}
+</style>
+<script>
+(function(){
+  const $r=id=>document.getElementById(id);
+  const period=$r('reportPeriod'), month=$r('reportMonth'), year=$r('reportYear');
+  const status=$r('reportStatus'), grid=$r('reportGrid');
+  month.value=String(new Date().getMonth()+1);
+  year.value=String(new Date().getFullYear());
+  let last=null;
+  function showPeriod(){ $r('reportMonthWrap').style.display=period.value==='month'?'flex':'none'; }
+  function numeric(obj,key){ const n=Number(obj && obj[key]); return Number.isFinite(n)?n:0; }
+  function groupCard(name,g){
+    const card=document.createElement('div'); card.className='report-card';
+    const h=document.createElement('h3');h.textContent=name;card.appendChild(h);
+    [['Бірегей оқырман','readers'],['Берілген кітап','issued'],['Кезеңде қайтарылған','returned'],['Қазір қайтарылмаған','outstanding_now']].forEach(([label,key])=>{
+      const p=document.createElement('p');p.textContent=label+': '+numeric(g,key);card.appendChild(p);
+    });
+    return card;
   }
-};
+  async function loadReport(){
+    const y=Number(year.value),m=Number(month.value);
+    if(!Number.isInteger(y)||y<2000||y>2100){status.textContent='Жылды дұрыс таңдаңыз';return;}
+    const q=new URLSearchParams({year:String(y),school_year:String(y),period:period.value});
+    if(period.value==='month')q.set('month',String(m));
+    status.textContent='Есеп жүктелуде...';grid.replaceChildren();last=null;
+    try{
+      const response=await fetch('/api/statistics?'+q.toString());
+      const data=await response.json();
+      if(!response.ok)throw new Error(data.error||'Сервер қатесі');
+      const groups=data.groups||{};
+      grid.append(groupCard('🎓 Оқушылар',groups.student),groupCard('👩‍🏫 Мұғалімдер',groups.teacher));
+      status.textContent=period.value==='month'?`${y} жылғы ${month.options[month.selectedIndex].text} айының есебі`:`${y}–${y+1} оқу жылының есебі`;
+      last={groups,period:period.value,year:y,month:m};
+    }catch(e){status.textContent='Есеп жүктелмеді: '+e.message;}
+  }
+  function csvCell(x){return '"'+String(x).replace(/"/g,'""')+'"';}
+  function downloadReport(){
+    if(!last){status.textContent='Алдымен есепті көрсетіңіз';return;}
+    const heading=['Кезең','Топ','Бірегей оқырман','Берілген кітап','Кезеңде қайтарылған','Қазір қайтарылмаған'];
+    const label=last.period==='month'?`${last.year}-${String(last.month).padStart(2,'0')}`:`${last.year}-${last.year+1}`;
+    const rows=[heading];
+    for(const [key,name] of [['student','Оқушылар'],['teacher','Мұғалімдер']]){
+      const g=last.groups[key]||{};
+      rows.push([label,name,numeric(g,'readers'),numeric(g,'issued'),numeric(g,'returned'),numeric(g,'outstanding_now')]);
+    }
+    const csv='\ufeff'+rows.map(r=>r.map(csvCell).join(';')).join('\r\n');
+    const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+    const a=document.createElement('a');a.href=url;a.download='library_statistics_'+label+'.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+  period.addEventListener('change',showPeriod);
+  $r('reportRefresh').addEventListener('click',loadReport);
+  $r('reportDownload').addEventListener('click',downloadReport);
+  showPeriod();loadReport();
+})();
 </script>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
-</body></html>
+</main><script>
+'use strict';
+const $=id=>document.getElementById(id);
+const msg=t=>{$('message').textContent=t};
+let all=[],qrScanner=null;
+async function api(url,options){const r=await fetch(url,options);const d=await r.json();if(!r.ok)throw Error(d.error||'Сервер қатесі');return d}
+async function load(){try{const d=await api('/api/books');all=Array.isArray(d.books)?d.books:[];Object.entries(d.stats||{}).forEach(([k,v])=>{const node=$(k);if(node)node.textContent=v});render();refreshManagement();const h=await api('/api/loans');$('history').replaceChildren(...(Array.isArray(h)?h:[]).map(x=>{const tr=document.createElement('tr');[x.title+(x.inventory_number?' · Инв. № '+x.inventory_number:''),x.reader,x.reader_type==='student'?'Оқушы':x.reader_type==='teacher'?'Мұғалім':'—',x.issued_at,x.returned_at||'—'].forEach(v=>{const td=document.createElement('td');td.textContent=v??'—';tr.append(td)});return tr}))}catch(e){msg('Сервер қатесі: '+e.message)}}
+function render(){
+ const q=$('search').value.trim().toLocaleLowerCase();
+ const shelf=$('shelf');shelf.replaceChildren();
+ for(const b of all){
+  const copies=Array.isArray(b.copies)?b.copies:[];
+  const matches=(b.title+' '+b.author+' '+b.code).toLocaleLowerCase().includes(q);
+  const filtered=copies.filter(c=>matches||String(c.inventory_number).toLocaleLowerCase().includes(q));
+  for(const c of filtered){
+   const el=document.createElement('article');el.className='book';
+   const h=document.createElement('h3');h.textContent=b.title;
+   const author=document.createElement('small');author.textContent=b.author;
+   const inv=document.createElement('div');inv.className='inventory-label';inv.textContent='Инв. № '+c.inventory_number;
+   const st=document.createElement('div');st.className='status';
+   st.textContent=c.status==='available'?'Қолда бар':'Қолда жоқ';
+   if(c.status!=='available')st.classList.add('unavailable');
+   const editBtn=document.createElement('button');editBtn.textContent='✏️ Өңдеу';
+   editBtn.onclick=()=>{ $('manageBook').value=b.code;fillManageBook();$('manageCopy').value=c.inventory_number;$('manage-panel').scrollIntoView({behavior:'smooth',block:'center'})};
+   el.append(h,author,inv,st,editBtn);
+   if(b.pdf_url){const link=document.createElement('a');link.href=b.pdf_url;link.target='_blank';link.rel='noopener noreferrer';link.textContent='PDF оқу';el.append(link)}
+   shelf.append(el);
+  }
+  const missing=Math.max(0,Number(b.total_copies||0)-copies.length);
+  if(matches&&missing){
+   const el=document.createElement('article');el.className='book pending-copy';
+   const h=document.createElement('h3');h.textContent=b.title;
+   const author=document.createElement('small');author.textContent=b.author;
+   const note=document.createElement('div');note.className='inventory-label';note.textContent='Инвентарлық нөмір тіркелмеген';
+   const status=document.createElement('div');status.className='muted';status.textContent='Нөмірі енгізілмеген дана: '+missing;
+   el.append(h,author,note,status);shelf.append(el);
+  }
+ }
+ if(!shelf.children.length){const p=document.createElement('p');p.textContent='Кітап табылмады';shelf.append(p)}
+}
+$('search').oninput=render;
+$('submit').onclick=async()=>{try{const action=$('action').value;const reader_type=$('reader_type').value;if(action==='issue'&&!reader_type)throw Error('Оқушы немесе Мұғалім түрін таңдаңыз');await api('/api/transaction',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:$('code').value,reader:$('reader').value,action,reader_type})});msg('✅ Операция сәтті тіркелді');await load()}catch(e){msg('⚠️ '+e.message)}};
+function detected(v){if(!v)return;let code=v.trim();try{const u=new URL(code);code=u.searchParams.get('code')||code}catch(e){}if(code){$('code').value=code;msg('Код танылды: '+code)}else msg('Танылған мән: '+code+' (кітап кодын тексеріңіз)')}
+$('file').onchange=async e=>{const file=e.target.files[0];if(!file)return;const fd=new FormData();fd.append('image',file);try{const d=await api('/api/scan-image',{method:'POST',body:fd});if(d.found)detected(d.code);else msg('Код танылмады. Суретті анық түсіріңіз.')}catch(err){msg(err.message)}};
+$('camera').onclick=async()=>{try{if(qrScanner)return;if(typeof Html5Qrcode==='undefined')throw Error('Сканер кітапханасы жүктелмеді');$('video').style.display='none';let area=$('qr-reader');if(!area){area=document.createElement('div');area.id='qr-reader';area.style.maxWidth='480px';$('video').parentElement.appendChild(area)}qrScanner=new Html5Qrcode('qr-reader');await qrScanner.start({facingMode:'environment'},{fps:10,qrbox:{width:220,height:220}},text=>detected(text),()=>{});msg('Камера қосылды')}catch(e){qrScanner=null;msg('Камера қатесі: '+e.message)}};
+$('stop').onclick=async()=>{try{if(qrScanner){await qrScanner.stop();qrScanner.clear();qrScanner=null}msg('Камера тоқтады')}catch(e){msg('Тоқтату қатесі: '+e.message)}};
+// Search active loans and return the exact loan record, not just a book code.
+async function searchActiveLoans(){
+ const q=$('loanSearch').value.trim();const tbody=$('loanSearchResults');tbody.replaceChildren();
+ if(!q){$('loanSearchMessage').textContent='Іздеу үшін аты-жөнін жазыңыз';return}
+ try{
+ const type = $('loanSearchType').value;
+let url;
+
+if (type === 'book') {
+  url = '/api/loans/search-by-book?title=' + encodeURIComponent(q);
+} else if (type === 'author') {
+  url = '/api/loans/search-by-author?author=' + encodeURIComponent(q);
+} else {
+  url = '/api/loans/active?reader=' + encodeURIComponent(q);
+}
+
+const records = await api(url);
+  $('loanSearchMessage').textContent=records.length?records.length+' қайтарылмаған кітап табылды':'Қайтарылмаған кітап табылмады';
+  for(const x of records){
+   const tr=document.createElement('tr');
+   for(const value of [x.reader,x.title,x.issued_at]){const td=document.createElement('td');td.textContent=value||'—';tr.append(td)}
+   const td=document.createElement('td');const btn=document.createElement('button');btn.type='button';btn.className='return-btn';btn.textContent='Қайтару';
+   btn.onclick=async()=>{
+    if(!confirm(x.reader+' оқырманының «'+x.title+'» кітабын қайтаруды растайсыз ба?'))return;
+    btn.disabled=true;
+    try{await api('/api/loans/'+encodeURIComponent(x.id)+'/return',{method:'POST'});$('loanSearchMessage').textContent='Кітап қайтарылды';await load();await searchActiveLoans()}
+    catch(e){$('loanSearchMessage').textContent='Қате: '+e.message;btn.disabled=false}
+   };
+   td.append(btn);tr.append(td);tbody.append(tr)
+  }
+ }catch(e){$('loanSearchMessage').textContent='Іздеу қатесі: '+e.message}
+}
+$('loanSearchBtn').onclick=searchActiveLoans;
+$('loanSearch').addEventListener('keydown',e=>{if(e.key==='Enter')searchActiveLoans()});
+async function loadInventoryBooks(){
+ const previous=$('inventoryBook').value;
+ const data=await api('/api/books');
+ const sel=$('inventoryBook');sel.replaceChildren(new Option('Жаңа кітап енгізу',''));
+ for(const b of data.books||[])sel.add(new Option(b.title+' — '+b.author,b.code));
+ sel.value=previous;
+}
+$('inventoryBook').onchange=()=>{
+ const b=all.find(x=>x.code===$('inventoryBook').value);
+ $('newTitle').value=b?b.title:'';
+ $('newAuthor').value=b?b.author:'';
+ $('newTitle').disabled=!!b;$('newAuthor').disabled=!!b;
+};
+$('inventoryAddBtn').onclick=async()=>{
+ const btn=$('inventoryAddBtn');btn.disabled=true;
+ try{
+  const data={book_code:$('inventoryBook').value,title:$('newTitle').value.trim(),author:$('newAuthor').value.trim(),inventory_number:$('inventoryNumber').value.trim()};
+  await api('/api/inventory/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  $('inventoryMessage').textContent='Инвентарлық нөмір сәтті тіркелді';$('inventoryNumber').value='';
+  await load();await loadInventoryBooks();
+ }catch(e){$('inventoryMessage').textContent='Қате: '+e.message}
+ finally{btn.disabled=false}
+};
+function refreshManagement(){
+ const bookSel=$('manageBook'),copySel=$('manageCopy');
+ const previousBook=bookSel.value,previousCopy=copySel.value;
+ bookSel.replaceChildren(new Option('Кітапты таңдаңыз',''));
+ copySel.replaceChildren(new Option('Инвентарлық нөмірді таңдаңыз',''));
+ for(const b of all){
+  bookSel.add(new Option(b.title+' — '+b.author,b.code));
+  for(const c of b.copies||[])copySel.add(new Option(b.title+' — № '+c.inventory_number,c.inventory_number));
+ }
+ if([...bookSel.options].some(x=>x.value===previousBook))bookSel.value=previousBook;
+ if([...copySel.options].some(x=>x.value===previousCopy))copySel.value=previousCopy;
+ fillManageBook();
+}
+function fillManageBook(){const b=all.find(x=>x.code===$('manageBook').value);$('manageTitle').value=b?b.title:'';$('manageAuthor').value=b?b.author:''}
+$('manageBook').onchange=fillManageBook;
+$('manageSave').onclick=async()=>{
+ try{await api('/api/catalog/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({book_code:$('manageBook').value,title:$('manageTitle').value.trim(),author:$('manageAuthor').value.trim()})});$('manageMessage').textContent='Кітап мәліметтері сақталды';await load();await loadInventoryBooks()}
+ catch(e){$('manageMessage').textContent='Қате: '+e.message}
+};
+$('manageRename').onclick=async()=>{
+ const old_number=$('manageCopy').value,new_number=$('manageNewNumber').value.trim();
+ if(!old_number||!new_number){$('renameMessage').textContent='Ескі және жаңа нөмірді таңдаңыз';return}
+ if(!confirm('№ '+old_number+' нөмірін № '+new_number+' етіп өзгертесіз бе?'))return;
+ try{await api('/api/inventory/rename',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({old_number,new_number})});$('renameMessage').textContent='Инвентарлық нөмір өзгертілді';$('manageNewNumber').value='';await load();$('manageCopy').value=new_number}
+ catch(e){$('renameMessage').textContent='Қате: '+e.message}
+};
+loadInventoryBooks();
+
+load();
+</script><script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script></body></html>
